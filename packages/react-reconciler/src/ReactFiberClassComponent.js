@@ -41,6 +41,7 @@ if (__DEV__) {
   var warning = require('fbjs/lib/warning');
 
   var {startPhaseTimer, stopPhaseTimer} = require('./ReactDebugFiberPerf');
+  var didWarnAboutStateAssignmentForComponent = {};
 
   var warnOnInvalidCallback = function(callback: mixed, callerName: string) {
     warning(
@@ -201,12 +202,25 @@ module.exports = function(
     if (__DEV__) {
       const name = getComponentName(workInProgress);
       const renderPresent = instance.render;
-      warning(
-        renderPresent,
-        '%s(...): No `render` method found on the returned component ' +
-          'instance: you may have forgotten to define `render`.',
-        name,
-      );
+
+      if (!renderPresent) {
+        if (type.prototype && typeof type.prototype.render === 'function') {
+          warning(
+            false,
+            '%s(...): No `render` method found on the returned component ' +
+              'instance: did you accidentally return an object from the constructor?',
+            name,
+          );
+        } else {
+          warning(
+            false,
+            '%s(...): No `render` method found on the returned component ' +
+              'instance: you may have forgotten to define `render`.',
+            name,
+          );
+        }
+      }
+
       const noGetInitialStateOnES6 =
         !instance.getInitialState ||
         instance.getInitialState.isReactClassApproved ||
@@ -393,13 +407,17 @@ module.exports = function(
 
     if (instance.state !== oldState) {
       if (__DEV__) {
-        warning(
-          false,
-          '%s.componentWillReceiveProps(): Assigning directly to ' +
-            "this.state is deprecated (except inside a component's " +
-            'constructor). Use setState instead.',
-          getComponentName(workInProgress),
-        );
+        const componentName = getComponentName(workInProgress) || 'Component';
+        if (!didWarnAboutStateAssignmentForComponent[componentName]) {
+          warning(
+            false,
+            '%s.componentWillReceiveProps(): Assigning directly to ' +
+              "this.state is deprecated (except inside a component's " +
+              'constructor). Use setState instead.',
+            componentName,
+          );
+          didWarnAboutStateAssignmentForComponent[componentName] = true;
+        }
       }
       updater.enqueueReplaceState(instance, instance.state, null);
     }
